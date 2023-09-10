@@ -10,6 +10,7 @@ import datetime
 import random
 import requests
 import json
+from bs4 import BeautifulSoup
 
 
 def update_aiml_knowledge_base(user_input, response, knowledge_base_file, user_profile_file):
@@ -31,6 +32,7 @@ def update_aiml_knowledge_base(user_input, response, knowledge_base_file, user_p
 
     print(f"Updated AIML knowledge base with: User Input='{user_input}', Response='{response}'")
 
+
 def load_user_profile(user_profile_file):
     try:
         with open(user_profile_file, 'r') as file:
@@ -38,12 +40,10 @@ def load_user_profile(user_profile_file):
     except FileNotFoundError:
         return {}
 
+
 def save_user_profile(user_profile, user_profile_file):
     with open(user_profile_file, 'w') as file:
         json.dump(user_profile, file, indent=4)
-
-
-
 
 
 nltk.download('punkt')
@@ -72,6 +72,33 @@ def say(text):
     speaker.Speak(text)
 
 
+def fetch_news_updates():
+    news_url = "https://www.bbc.co.uk/news/technology"
+
+    try:
+        response = requests.get(news_url)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            news_headlines = soup.find_all('h3', class_="gs-c-promo-heading__title gel-pica-bold nw-o-link-split__text")
+
+            if news_headlines:
+                # Randomly select a headline
+                random_headline = random.choice(news_headlines)
+
+                # Get the text content of the selected headline
+                headline_text = random_headline.text
+                say(headline_text)
+            else:
+                print("No headlines found on the page.")
+
+        else:
+            print("Failed to fetch news. Status code:", response.status_code)
+
+    except requests.exceptions.RequestException as e:
+        print("Error fetching news:", str(e))
+
+
+
 def ask_about_hobbies(user_profile):
     if "hobbies" in user_profile:
         user_hobbies = user_profile["hobbies"]
@@ -82,7 +109,6 @@ def ask_about_hobbies(user_profile):
         user_profile["hobbies"] = user_hobbies
         save_user_profile(user_profile, user_profile_file)
         say(f"Thanks for sharing! I'm interested in {random.choice(user_hobbies)} too.")
-
 
 
 def load_custom_commands(file_path):
@@ -322,18 +348,35 @@ def get_interesting_fact():
 
 def get_joke():
     try:
-        response = requests.get("https://v2.jokeapi.dev/joke/Any")
+        api_urls = [
+            "https://v2.jokeapi.dev/joke/Any",
+            "https://official-joke-api.appspot.com/jokes/random",
+            "https://icanhazdadjoke.com/",
+            "https://jokester-api.herokuapp.com/",
+            "https://geek-jokes.sameerkumar.website/api",
+        ]
+
+        # Select a random API URL
+        joke_api_url = random.choice(api_urls)
+
+        headers = {
+            "Accept": "application/json",
+            "User-Agent": "Your User Agent (optional)",
+        }
+
+        response = requests.get(joke_api_url, headers=headers)
         response.raise_for_status()  # Raise an exception if the request was not successful
         joke_data = response.json()
-        if joke_data["type"] == "single":
-            joke = joke_data["joke"]
-        elif joke_data["type"] == "two-part":
-            joke = f"{joke_data['setup']} {joke_data['delivery']}"
+
+        if "joke" in joke_data:
+            return joke_data["joke"]
+        elif "setup" in joke_data and "punchline" in joke_data:
+            return f"{joke_data['setup']} {joke_data['punchline']}"
         else:
-            joke = "I couldn't fetch a joke at the moment."
-        return joke
+            return "I couldn't fetch a joke at the moment."
+
     except requests.exceptions.RequestException as e:
-        print(f"Error fetching joke from JokeAPI: {e}")
+        print(f"Error fetching joke: {e}")
         return "I'm sorry, I couldn't fetch a joke at the moment."
 
 
@@ -468,12 +511,9 @@ def takeCommand():
     r = sr.Recognizer()
     with sr.Microphone() as source:
         r.pause_threshold = 0.8
-        print("Listening...")
         try:
             audio = r.listen(source)
             query = r.recognize_google(audio, language="en-in")
-            print(f"Recognized: {query}")
-            speaker.Speak(f"Vishwa, You Said {query}, So")
             return query
         except sr.WaitTimeoutError:
             return "TimeoutError"  # Handle timeout error
@@ -511,6 +551,10 @@ if __name__ == "__main__":
         apps = [["chrome", "chrome.exe"], ["file", "explorer.exe"], ["notepad", "notepad.exe"], ["code", "code"],
                 ["discord", "C:/Users/vishw/AppData/Local/Discord/Update.exe --processStart Discord.exe"], []]
 
+        who = ["who are you", "who", "who's there", "what are you"]
+
+        bye = ["quit", "done", "exit", "end", "break", "you are free", "bye", "bye-bye", "free"]
+
         for site in sites:
             if f"Open {site[0]}".lower() in query.lower():
                 say(f"I am opening {site[0]}")
@@ -527,7 +571,6 @@ if __name__ == "__main__":
             response = say("Thanks for telling me your Fancy")
             knowledge_base_file = "knowledge.aiml"
             update_aiml_knowledge_base(user_input, response, knowledge_base_file, user_profile_file)
-
 
         if "play neffex" in query:
             musicPath = ("D:/Musics/NEFFEX.mp3")
@@ -546,6 +589,7 @@ if __name__ == "__main__":
         elif "tell me a joke" in query.lower() or "jokes" in query.lower():
             joke = get_joke()
             if joke:
+                speaker.Rate = 0.5
                 say(joke)
             else:
                 say("I'm sorry, I couldn't fetch a joke at the moment. Here's one from my collection instead:")
@@ -559,6 +603,10 @@ if __name__ == "__main__":
             strfTime = datetime.datetime.now().strftime("%H:%M:%S")
             say(f"Vishwa, it's {strfTime}. Is there anything else you'd like to know?")
 
+        elif "news" in query.lower():
+            fetch_news_updates()
+
+
         elif "where is" in query:
             location = query
             place = location.split()
@@ -568,12 +616,11 @@ if __name__ == "__main__":
                 last_word = None
             maps(last_word)
 
-        who = ["who are you", "who", "who's there", "what are you"]
-        if f"{query}".lower() in who:
+        elif f"{query}".lower() in who:
             say("Hello Sir! I am Elly a dedicated AI assistant, designed and developed by Vishwa to enhance your daily life. With a blend of intelligence and personality, I am your reliable companion for a wide range of tasks and interactions. Whether you need assistance with organizing your schedule, answering questions, or simply engaging in friendly conversations, I am always at your service. With my intuitive understanding and adaptability, I am here to make your life easier and more enjoyable.")
 
-        bye = ["done", "exit", "end", "break", "you are free", "bye", "bye-bye", "free"]
-        if f"{query}".lower() in bye:
+
+        elif f"{query}".lower() in bye:
             say("Take Care Vishwa")
             break
 

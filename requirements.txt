@@ -3,7 +3,4 @@ python-aiml
 spacy
 nltk
 pywin32
-webbrowser
-datetime
-random
 requests
