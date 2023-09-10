@@ -1,0 +1,15 @@
+<aiml>
+    <!-- Your AIML categories go here -->
+    <category>
+        <pattern>YOUR_PATTERN_HERE</pattern>
+        <template>YOUR_TEMPLATE_HERE</template>
+    </category>
+
+    <category>
+        <pattern>MY FAVOURITE ANIMAL IS CAT</pattern>
+        <template>None</template>
+    </category>
+
+    <!-- Add more categories as needed -->
+</aiml>
+<category><pattern>MY FAVOURITE COLOUR IS BLACK</pattern><template>None</template></category>
