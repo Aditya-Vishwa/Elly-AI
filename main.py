@@ -1,3 +1,6 @@
+import uuid
+
+import pygame
 import speech_recognition as sr
 import os
 import aiml
@@ -10,7 +13,81 @@ import datetime
 import random
 import requests
 import json
+import pyautogui
+import keyboard
+import pyperclip
+from time import sleep
 from bs4 import BeautifulSoup
+from bardapi import BardCookies
+
+def CookieScrapper():
+    print("")
+    webbrowser.open("https://bard.google.com")
+    sleep(2)
+    pyautogui.click(x=1736, y=50)
+    sleep(1)
+    pyautogui.click(x=1505, y=84)
+    sleep(1)
+    keyboard.press_and_release('ctrl + w')
+    print("*The extraction of essential cookies from GoogleBard has been accomplished successfully.*")
+
+    data = pyperclip.paste()
+
+    try:
+        json_data = json.loads(data)
+        print(
+            "*The process of loading cookies has been executed without any issues, and the cookies are now successfully integrated into the system.*")
+        pass
+
+    except json.JSONDecodeError as e:
+        print("*Cookies Loaded Unsuccessfully*")
+        print("""*The error has been identified as a result of unsuccessful cookie replication from the Chrome extension, 
+        which is causing a disruption in the intended functionality.*""")
+
+    SID = "__Secure-1PSID"
+    TS = "__Secure-1PSIDTS"
+    CC = "__Secure-1PSIDCC"
+
+
+    SIDValue = next((item for item in json_data if item["name"] == SID), None)
+    TSValue = next((item for item in json_data if item["name"] == TS), None)
+    CCValue = next((item for item in json_data if item["name"] == CC), None)
+
+    if SIDValue is not None:
+        SIDValue = SIDValue["value"]
+    else:
+        print(f"{SIDValue} not found in the JSON data.")
+
+    if TSValue is not None:
+        TSValue = TSValue["value"]
+    else:
+        print(f"{TSValue} not found in the JSON data.")
+
+    if CCValue is not None:
+        CCValue = CCValue["value"]
+    else:
+        print(f"{CCValue} not found in the JSON data.")
+
+    cookie_dict = {
+        "__Secure-1PSID": SIDValue ,
+        "__Secure-1PSIDTS": TSValue,
+        "__Secure-1PSIDCC": CCValue,
+    }
+
+    return cookie_dict
+
+cookie_dict = CookieScrapper()
+
+try:
+    bard = BardCookies(cookie_dict=cookie_dict)
+    print("*The verification of cookies has been successfully completed.*")
+    print("*All processes have been completed successfully, and you now have the capability to employ Google Bard as a backend model.")
+    print("")
+
+except Exception as e:
+    print("*The verification of cookies has encountered an issue and has not been successful.*")
+    print("*This issue may arise due to the unsuccessful extraction of cookies from the extension.*")
+    print(e)
 
 
 def update_aiml_knowledge_base(user_input, response, knowledge_base_file, user_profile_file):
@@ -49,6 +126,7 @@ def save_user_profile(user_profile, user_profile_file):
 nltk.download('punkt')
 nltk.download('stopwords')
 nlp = spacy.load('en_core_web_sm')
+
 speaker = win32com.client.Dispatch("SAPI.SpVoice")
 speaker.Voice = speaker.GetVoices("gender=female")[0]
 
@@ -70,6 +148,54 @@ def tokenize(text):
 
 def say(text):
     speaker.Speak(text)
+
+
+def play_folder_music():
+    folder_path = "D:/Musics/"
+    try:
+        # Initialize the pygame mixer
+        pygame.mixer.init()
+
+        # Get a list of all files in the folder
+        audio_files = [file for file in os.listdir(folder_path) if file.endswith(".mp3")]
+
+        if not audio_files:
+            print("No MP3 files found in the folder.")
+            return
+
+        # Select a random audio file from the list
+        random_audio_file = random.choice(audio_files)
+
+        # Construct the full path to the selected audio file
+        music_path = os.path.join(folder_path, random_audio_file)
+
+        # Load and play the selected audio file
+        pygame.mixer.music.load(music_path)
+        pygame.mixer.music.play()
+
+        print(f"Now playing: {music_path}")
+
+        # Wait for the music to finish playing or for a "stop" command
+        while pygame.mixer.music.get_busy():
+            r = sr.Recognizer()
+            with sr.Microphone() as source:
+                print("Listening for commands...")
+                audio = r.listen(source)
+
+            try:
+                command = r.recognize_google(audio).lower()
+                print(f"Recognized command: {command}")
+                if "stop" in command or "quit" in command:
+                    pygame.mixer.music.stop()
+                    print("Music stopped.")
+                    break
+            except sr.UnknownValueError:
+                pass
+            except sr.RequestError as e:
+                print(f"Could not request results: {e}")
+
+    except Exception as e:
+        print(f"Error while playing music: {e}")
 
 
 def fetch_news_updates():
@@ -525,6 +651,7 @@ def takeCommand():
 
 
 if __name__ == "__main__":
+    bard = BardCookies(cookie_dict=cookie_dict)
     user_profile_file = "user_profiles.json"
     user_profile = load_user_profile(user_profile_file)
     greet_user()
@@ -532,14 +659,39 @@ if __name__ == "__main__":
     speaker.Speak("How can i assist you Today?")
     while True:
         query = takeCommand()
-        if query == "Error":
-            say("I'm sorry, an error occurred while processing your request. Please try again.")
 
-        elif query == "UnknownValueError":
-            say("I couldn't understand what you said. Can you please repeat it?")
+        if "Hello".lower() in query.lower():
+            reply = bard.get_answer(query)['content']
+            response = reply.split('\n')
+            query = query.lower()
+            words = query.split()
+            from_index = words.index("to") if "to".lower() in words else 0
+            last_index = words.index("last") if "last".lower() in words else len(words)
+            file_name_words = words[from_index + 1:last_index]
+            filename = 'To' + ''.join([word.capitalize() for word in file_name_words])
+            file_path = filename + '.md'
+            with open(file_path, 'w') as file:
+                file.write(reply)
+            say(response[0])
+            say(response[-1])
 
-        elif query == "TimeoutError":
-            say("I didn't hear any input. Please speak something.")
+
+        elif "Who is".lower() in query.lower():
+            reply = bard.get_answer(query)['content']
+            response = reply.split('\n')
+            query = query.lower()
+            words = query.split()
+            from_index = words.index("is") if "is".lower() in words else 0
+            last_index = words.index("last") if "last".lower() in words else len(words)
+            file_name_words = words[from_index + 1:last_index]
+            filename = ''.join([word.capitalize() for word in file_name_words])
+            file_path = filename + '.md'
+            with open(file_path, 'w') as file:
+                file.write(reply)
+            say(response[0:3])
+
+        elif "Who am I".lower() in query.lower() or "myself".lower() in query.lower():
+            say("You are Vishwa, My Developer. Thanks for developing me.")
 
         sites = [["youtube", "https://www.youtube.com/"], ["google", "https://www.google.com/"],
                  ["portfolio", "https://Aditya-Vishwa.github.io/My-Portfolio"],
@@ -553,7 +705,7 @@ if __name__ == "__main__":
 
         who = ["who are you", "who", "who's there", "what are you"]
 
-        bye = ["quit", "done", "exit", "end", "break", "you are free", "bye", "bye-bye", "free"]
+        bye = ["quit", "done", "exit", "end", "break", "you are free", "bye", "bye-bye", "free", "close", "no", "Thankyou"]
 
         for site in sites:
             if f"Open {site[0]}".lower() in query.lower():
@@ -572,10 +724,8 @@ if __name__ == "__main__":
             knowledge_base_file = "knowledge.aiml"
             update_aiml_knowledge_base(user_input, response, knowledge_base_file, user_profile_file)
 
-        if "play neffex" in query:
-            musicPath = ("D:/Musics/NEFFEX.mp3")
-            speaker.Speak("Let's Go...")
-            os.system(f"start wmplayer {musicPath}")
+        elif "play songs" in query:
+            play_folder_music()
 
         elif "interesting" in query.lower() or "tell me something" in query.lower():
             response = get_interesting_fact()
@@ -625,4 +775,4 @@ if __name__ == "__main__":
             break
 
         print("listening again...")
-        speaker.Speak("Listening to you")
+        say("Feel free to ask anything.")

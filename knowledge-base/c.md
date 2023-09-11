@@ -971,3 +971,4 @@ Floating-point numbers can also represent special values:
 When working with floating-point numbers, be aware of issues related to precision and rounding errors. Floating-point arithmetic may not always produce exact results, especially when dealing with irrational numbers or very large or very small values. Therefore, it's essential to use appropriate functions and techniques for comparing floating-point numbers to avoid unexpected behavior in your programs.
 
 In summary, `float` and `double` are floating-point data types in C used to represent real numbers with decimal points. The choice between them depends on the required precision, range, and memory constraints of your program. Understanding the characteristics and limitations of these data types is crucial for accurate numerical computations in C programming.
+
