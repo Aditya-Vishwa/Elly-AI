@@ -1,5 +1,3 @@
-import uuid
-
 import pygame
 import speech_recognition as sr
 import os
@@ -19,6 +17,8 @@ import pyperclip
 from time import sleep
 from bs4 import BeautifulSoup
 from bardapi import BardCookies
+import threading
+
 
 def CookieScrapper():
     print("")
@@ -29,6 +29,7 @@ def CookieScrapper():
     pyautogui.click(x=1505, y=84)
     sleep(1)
     keyboard.press_and_release('ctrl + w')
+    keyboard.press_and_release('alt + tab')
     print("*The extraction of essential cookies from GoogleBard has been accomplished successfully.*")
 
     data = pyperclip.paste()
@@ -48,10 +49,12 @@ def CookieScrapper():
     TS = "__Secure-1PSIDTS"
     CC = "__Secure-1PSIDCC"
 
-
-    SIDValue = next((item for item in json_data if item["name"] == SID), None)
-    TSValue = next((item for item in json_data if item["name"] == TS), None)
-    CCValue = next((item for item in json_data if item["name"] == CC), None)
+    try:
+        SIDValue = next((item for item in json_data if item["name"] == SID), None)
+        TSValue = next((item for item in json_data if item["name"] == TS), None)
+        CCValue = next((item for item in json_data if item["name"] == CC), None)
+    except Exception as e:
+        print(f"Exception Occured {e}")
 
     if SIDValue is not None:
         SIDValue = SIDValue["value"]
@@ -69,25 +72,12 @@ def CookieScrapper():
         print(f"{CCValue} not found in the JSON data.")
 
     cookie_dict = {
-        "__Secure-1PSID": SIDValue ,
+        "__Secure-1PSID": SIDValue,
         "__Secure-1PSIDTS": TSValue,
         "__Secure-1PSIDCC": CCValue,
     }
 
     return cookie_dict
-
-cookie_dict = CookieScrapper()
-
-try:
-    bard = BardCookies(cookie_dict=cookie_dict)
-    print("*The verification of cookies has been successfully completed.*")
-    print("*All processes have been completed successfully, and you now have the capability to employ Google Bard as a backend model.")
-    print("")
-
-except Exception as e:
-    print("*The verification of cookies has encountered an issue and has not been successful.*")
-    print("*This issue may arise due to the unsuccessful extraction of cookies from the extension.*")
-    print(e)
 
 
 def update_aiml_knowledge_base(user_input, response, knowledge_base_file, user_profile_file):
@@ -151,48 +141,85 @@ def say(text):
 
 
 def play_folder_music():
+    pygame.mixer.init()
     folder_path = "D:/Musics/"
     try:
-        # Initialize the pygame mixer
-        pygame.mixer.init()
+        while True:
+            # Get a list of all files in the folder
+            audio_files = [file for file in os.listdir(folder_path) if file.endswith(".mp3")]
 
-        # Get a list of all files in the folder
-        audio_files = [file for file in os.listdir(folder_path) if file.endswith(".mp3")]
+            if not audio_files:
+                print("No MP3 files found in the folder.")
+                return
 
-        if not audio_files:
-            print("No MP3 files found in the folder.")
-            return
+            # Select a random audio file from the list
+            random_audio_file = random.choice(audio_files)
 
-        # Select a random audio file from the list
-        random_audio_file = random.choice(audio_files)
+            # Construct the full path to the selected audio file
+            music_path = os.path.join(folder_path, random_audio_file)
 
-        # Construct the full path to the selected audio file
-        music_path = os.path.join(folder_path, random_audio_file)
+            # Load and play the selected audio file
+            pygame.mixer.music.load(music_path)
+            pygame.mixer.music.play()
 
-        # Load and play the selected audio file
-        pygame.mixer.music.load(music_path)
-        pygame.mixer.music.play()
+            print(f"Now playing: {music_path}")
 
-        print(f"Now playing: {music_path}")
+            # Initialize the command variable
+            command = ""
 
-        # Wait for the music to finish playing or for a "stop" command
-        while pygame.mixer.music.get_busy():
-            r = sr.Recognizer()
-            with sr.Microphone() as source:
-                print("Listening for commands...")
-                audio = r.listen(source)
+            # Set an event for the end of the music
+            pygame.mixer.music.set_endevent(pygame.USEREVENT)
 
-            try:
-                command = r.recognize_google(audio).lower()
-                print(f"Recognized command: {command}")
-                if "stop" in command or "quit" in command:
-                    pygame.mixer.music.stop()
-                    print("Music stopped.")
-                    break
-            except sr.UnknownValueError:
-                pass
-            except sr.RequestError as e:
-                print(f"Could not request results: {e}")
+            # Wait for the music to finish playing or for a command
+            while True:
+                r = sr.Recognizer()
+                with sr.Microphone() as source:
+                    print("Listening for commands...")
+                    audio = r.listen(source)
+
+                try:
+                    command = r.recognize_google(audio).lower()
+                    print(f"Recognized command: {command}")
+
+                    if "stop" in command or "quit" in command:
+                        pygame.mixer.music.stop()
+                        print("Music stopped.")
+                        return
+
+                    # Volume control, maximum volume, and minimum volume (same as before)
+                    if "volume up" in command:
+                        pygame.mixer.music.set_volume(min(1.0, pygame.mixer.music.get_volume() + 0.1))
+                        say("Volume increased.")
+
+                    if "volume down" in command:
+                        pygame.mixer.music.set_volume(max(0.0, pygame.mixer.music.get_volume() - 0.1))
+                        say("Volume decreased.")
+
+                    if "max volume" in command:
+                        pygame.mixer.music.set_volume(1.0)
+                        say("Maximum volume set.")
+
+                    if "minimum volume" in command:
+                        pygame.mixer.music.set_volume(0.0)
+                        say("Minimum volume set.")
+
+                    # Next song
+                    if "next song" in command or "next" in command or "next one" in command:
+                        pygame.mixer.music.stop()
+                        break  # Exit the inner loop to go to the next song
+
+                    # Pause and play (same as before)
+                    if "pause" in command:
+                        pygame.mixer.music.pause()
+                        print("Music paused.")
+                    elif "play" in command:
+                        pygame.mixer.music.unpause()
+                        print("Music resumed.")
+
+                except sr.UnknownValueError:
+                    pass
+                except sr.RequestError as e:
+                    print(f"Could not request results: {e}")
 
     except Exception as e:
         print(f"Error while playing music: {e}")
@@ -222,7 +249,6 @@ def fetch_news_updates():
 
     except requests.exceptions.RequestException as e:
         print("Error fetching news:", str(e))
-
 
 
 def ask_about_hobbies(user_profile):
@@ -636,7 +662,7 @@ def play_quiz():
 def takeCommand():
     r = sr.Recognizer()
     with sr.Microphone() as source:
-        r.pause_threshold = 0.8
+        r.pause_threshold = 1
         try:
             audio = r.listen(source)
             query = r.recognize_google(audio, language="en-in")
@@ -651,7 +677,6 @@ def takeCommand():
 
 
 if __name__ == "__main__":
-    bard = BardCookies(cookie_dict=cookie_dict)
     user_profile_file = "user_profiles.json"
     user_profile = load_user_profile(user_profile_file)
     greet_user()
@@ -660,7 +685,17 @@ if __name__ == "__main__":
     while True:
         query = takeCommand()
 
-        if "Hello".lower() in query.lower():
+        if "Hey".lower() in query.lower() or "write me".lower() in query.lower() or "Hey".lower() in query.lower():
+            cookie_dict = CookieScrapper()
+            try:
+                bard = BardCookies(cookie_dict=cookie_dict)
+            except Exception as e:
+                if "SNlM0e value not found" in str(e):
+                    # Handle the missing value error here
+                    print("SNlM0e value not found in response. Check __Secure-1PSID value.")
+                else:
+                    # Handle other exceptions if needed
+                    print("An error occurred:", str(e))
             reply = bard.get_answer(query)['content']
             response = reply.split('\n')
             query = query.lower()
@@ -674,8 +709,6 @@ if __name__ == "__main__":
                 file.write(reply)
             say(response[0])
             say(response[-1])
-
-
         elif "Who is".lower() in query.lower():
             reply = bard.get_answer(query)['content']
             response = reply.split('\n')
@@ -703,76 +736,91 @@ if __name__ == "__main__":
         apps = [["chrome", "chrome.exe"], ["file", "explorer.exe"], ["notepad", "notepad.exe"], ["code", "code"],
                 ["discord", "C:/Users/vishw/AppData/Local/Discord/Update.exe --processStart Discord.exe"], []]
 
-        who = ["who are you", "who", "who's there", "what are you"]
+        bye = ["quit", "done", "exit", "end", "break", "you are free", "bye", "bye-bye", "free", "close", "no",
+               "thankyou","thank","thank-you"]
 
-        bye = ["quit", "done", "exit", "end", "break", "you are free", "bye", "bye-bye", "free", "close", "no", "Thankyou"]
+        try:
 
-        for site in sites:
-            if f"Open {site[0]}".lower() in query.lower():
-                say(f"I am opening {site[0]}")
-                webbrowser.open(site[1])
+            for site in sites:
+                if f"Open {site[0]}".lower() in query.lower():
+                    say(f"I am opening {site[0]}")
+                    webbrowser.open(site[1])
 
-        for app in apps:
-            # if f"open {app[0]}".lower() in query.lower():
-            if len(app) > 0 and f"open {app[0]}".lower() in query.lower():
-                say(f"Opening {app[0]} for you.")
-                os.system(f"start {app[1]}")
+            for app in apps:
+                # if f"open {app[0]}".lower() in query.lower():
+                if len(app) > 0 and f"open {app[0]}".lower() in query.lower():
+                    say(f"Opening {app[0]} for you.")
+                    os.system(f"start {app[1]}")
 
-        if "My Favourite".lower() in query.lower():
-            user_input = query.upper()
-            response = say("Thanks for telling me your Fancy")
-            knowledge_base_file = "knowledge.aiml"
-            update_aiml_knowledge_base(user_input, response, knowledge_base_file, user_profile_file)
-
-        elif "play songs" in query:
-            play_folder_music()
-
-        elif "interesting" in query.lower() or "tell me something" in query.lower():
-            response = get_interesting_fact()
-            speaker.Rate = 0.5
-            say(response)
-
-        elif "play quiz" in query.lower():
-            play_quiz()
-
-
-        elif "tell me a joke" in query.lower() or "jokes" in query.lower():
-            joke = get_joke()
-            if joke:
+            if "My Favourite".lower() in query.lower():
+                user_input = query.upper()
+                response = "Thanks for telling me your Fancy"
+                knowledge_base_file = "knowledge.aiml"
+                update_aiml_knowledge_base(user_input, say({response}), knowledge_base_file, user_profile_file)
+                break
+            elif "play songs" in query.lower():
+                play_folder_music()
+            elif "interesting" in query.lower() or "tell me something" in query.lower() or "story" in query.lower():
+                response = get_interesting_fact()
                 speaker.Rate = 0.5
-                say(joke)
+                say(response)
+            elif "play quiz" in query.lower():
+                play_quiz()
+            elif "tell me a joke" in query.lower() or "jokes" in query.lower():
+                joke = get_joke()
+                if joke:
+                    speaker.Rate = 0.5
+                    say(joke)
+                else:
+                    say("I'm sorry, I couldn't fetch a joke at the moment. Here's one from my collection instead:")
+                    say(get_joke())
+            elif "hobbies" in query.lower():
+                ask_about_hobbies()
+            elif "time" in query:
+                strfTime = datetime.datetime.now().strftime("%H:%M:%S")
+                say(f"Vishwa, it's {strfTime}. Is there anything else you'd like to know?")
+            elif "news" in query.lower():
+                fetch_news_updates()
+            elif "where is" in query.lower():
+                location = query
+                place = location.split()
+                if place:
+                    last_word = place[-1]
+                else:
+                    last_word = None
+                maps(last_word)
+            elif "who are you" in query.lower() or "what are you" in query.lower() or "who" in query.lower() or "hu r u" in query.lower() or "what r u" in query.lower() or "hu" in query.lower():
+                say("""
+                Hello Sir! I am Elly a dedicated AI assistant, 
+                designed and developed by Vishwa to enhance your daily life. 
+                With a blend of intelligence and personality, 
+                I am your reliable companion for a wide range of tasks and interactions. 
+                Whether you need assistance with organizing your schedule, answering questions, or simply engaging in friendly conversations, 
+                I am always at your service. With my intuitive understanding and adaptability, 
+                I am here to make your life easier and more enjoyable.
+                """)
+            elif "good morning" in query.lower():
+                greet_user()
+                takeCommand()
+            elif "good afternoon" in query.lower():
+                greet_user()
+                takeCommand()
+            elif "good evening" in query.lower():
+                greet_user()
+                takeCommand()
+            elif "good night" in query.lower():
+                say("Good Night, Vishwa")
+                break
+
+            elif f"{query}".lower() in bye:
+                say("Take Care Vishwa, I am always here to help you.")
+                break
             else:
-                say("I'm sorry, I couldn't fetch a joke at the moment. Here's one from my collection instead:")
-                say(get_joke())
+                print(f"{query}")
+                say("Feel free to ask anything.")
 
+        except Exception as e:
 
-        elif "hobbies" in query.lower():
-            ask_about_hobbies()
-
-        elif "time" in query:
-            strfTime = datetime.datetime.now().strftime("%H:%M:%S")
-            say(f"Vishwa, it's {strfTime}. Is there anything else you'd like to know?")
-
-        elif "news" in query.lower():
-            fetch_news_updates()
-
-
-        elif "where is" in query:
-            location = query
-            place = location.split()
-            if place:
-                last_word = place[-1]
-            else:
-                last_word = None
-            maps(last_word)
-
-        elif f"{query}".lower() in who:
-            say("Hello Sir! I am Elly a dedicated AI assistant, designed and developed by Vishwa to enhance your daily life. With a blend of intelligence and personality, I am your reliable companion for a wide range of tasks and interactions. Whether you need assistance with organizing your schedule, answering questions, or simply engaging in friendly conversations, I am always at your service. With my intuitive understanding and adaptability, I am here to make your life easier and more enjoyable.")
-
-
-        elif f"{query}".lower() in bye:
-            say("Take Care Vishwa")
-            break
-
-        print("listening again...")
-        say("Feel free to ask anything.")
+            print("listening again...")
+            print(f"{query}")
+            say("Currently, I am in development phase that's why a little limitations, Know.")
